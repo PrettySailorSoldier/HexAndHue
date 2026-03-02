@@ -65,22 +65,11 @@ export default function App() {
     removeFromFavorites, clearHistory, isFavorite, toggleFavorite
   } = usePaletteHistory();
 
-  useEffect(() => {
-    if (selectedColor) updateHarmony(selectedHarmony);
-  }, [selectedColor, selectedHarmony, updateHarmony]);
-
-  useEffect(() => {
-    if (harmonyColors.length > 0) setActivePalette(harmonyColors);
-  }, [harmonyColors]);
-
-  useEffect(() => {
-    if (moodPalette.length > 0) setActivePalette(moodPalette);
-  }, [moodPalette]);
-
+  // Define updateHarmony BEFORE the useEffect that depends on it
   const updateHarmony = useCallback((harmonyType) => {
     if (!selectedColor) return;
     let colors;
-    
+
     // If using smart context, generate context-aware palette
     if (harmonyType === 'smart') {
       colors = generateSmartHarmony(selectedColor, designContext);
@@ -96,10 +85,22 @@ export default function App() {
         default: colors = getTriadic(selectedColor);
       }
     }
-    
+
     setHarmonyColors(colors);
     setSelectedHarmony(harmonyType);
   }, [selectedColor, designContext]);
+
+  useEffect(() => {
+    if (selectedColor) updateHarmony(selectedHarmony);
+  }, [selectedColor, selectedHarmony, updateHarmony]);
+
+  useEffect(() => {
+    if (harmonyColors.length > 0) setActivePalette(harmonyColors);
+  }, [harmonyColors]);
+
+  useEffect(() => {
+    if (moodPalette.length > 0) setActivePalette(moodPalette);
+  }, [moodPalette]);
 
   const handleColorSelect = useCallback((color) => setSelectedColor(color), []);
 
