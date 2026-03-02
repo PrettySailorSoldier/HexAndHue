@@ -318,29 +318,35 @@ function determineHuePath(baseColor, style) {
  */
 function generateKeyStops(baseColor, mood, style, stopCount) {
   const l = baseColor.l ?? 0.5;
-  const c = baseColor.c ?? 0.1;
+  // Ensure minimum chroma for visible color gradients
+  const c = Math.max(0.12, baseColor.c ?? 0.1);
   const h = baseColor.h ?? 0;
 
   const generators = {
     // ATMOSPHERIC: Base → desaturated midpoint → complementary at lower lightness
     // Feels like a sky at dusk
     atmospheric: () => {
-      const stops = [baseColor];
+      const stops = [{
+        mode: 'oklch',
+        l: Math.max(0.4, l),
+        c: Math.max(0.1, c),
+        h
+      }];
 
-      // Midpoint: desaturated, slightly shifted
+      // Midpoint: slightly desaturated, shifted
       stops.push({
         mode: 'oklch',
-        l: l * 0.85,
-        c: c * 0.4,
-        h: normalizeHue(h + 20)
+        l: Math.max(0.35, l * 0.85),
+        c: Math.max(0.06, c * 0.5),
+        h: normalizeHue(h + 30)
       });
 
-      // End: near-complement, darker, muted
+      // End: near-complement, darker
       stops.push({
         mode: 'oklch',
-        l: Math.max(0.15, l - 0.25),
-        c: c * 0.6,
-        h: normalizeHue(h + 160)
+        l: Math.max(0.2, l - 0.2),
+        c: Math.max(0.08, c * 0.7),
+        h: normalizeHue(h + 150)
       });
 
       return stops;
@@ -373,25 +379,26 @@ function generateKeyStops(baseColor, mood, style, stopCount) {
 
     // EARTHY: Warm analogous shifts, natural pigment feel
     earthy: () => {
-      const warmBase = normalizeHue(h > 270 || h < 90 ? h : h + 30);
+      // Force hue toward warm earth tones (30-60 range)
+      const warmBase = normalizeHue(30 + (h % 60));
       const stops = [
-        { mode: 'oklch', l, c: Math.min(c, 0.15), h: warmBase }
+        { mode: 'oklch', l: Math.max(0.45, l), c: Math.max(0.1, Math.min(c, 0.18)), h: warmBase }
       ];
 
       // Warm shift (toward ochre/sienna zone)
       stops.push({
         mode: 'oklch',
-        l: l + 0.05,
-        c: c * 0.85,
-        h: normalizeHue(warmBase + 15)
+        l: Math.min(0.65, l + 0.1),
+        c: Math.max(0.08, c * 0.9),
+        h: normalizeHue(warmBase + 20)
       });
 
-      // Neutral with warm undertone
+      // Deeper earth tone
       stops.push({
         mode: 'oklch',
-        l: l - 0.1,
-        c: Math.max(0.02, c * 0.25),
-        h: normalizeHue(warmBase - 10)
+        l: Math.max(0.3, l - 0.15),
+        c: Math.max(0.06, c * 0.6),
+        h: normalizeHue(warmBase - 15)
       });
 
       return stops;
@@ -399,29 +406,29 @@ function generateKeyStops(baseColor, mood, style, stopCount) {
 
     // DREAMY: Ethereal, light-to-lighter progression
     dreamy: () => {
-      // Start with reduced chroma
+      // Shift toward dreamy pastels (lavender/pink zone)
+      const dreamHue = normalizeHue(280 + (h % 80));
       const stops = [{
         mode: 'oklch',
-        l: Math.max(0.5, l - 0.1),
-        c: c * 0.7,
-        h
+        l: Math.max(0.55, l),
+        c: Math.max(0.08, c * 0.8),
+        h: dreamHue
       }];
 
-      // Shift toward blue-violet zone
-      const dreamShift = h < 200 ? 60 : -40;
+      // Shift toward lighter, softer
       stops.push({
         mode: 'oklch',
-        l: Math.min(0.85, l + 0.15),
-        c: c * 0.5,
-        h: normalizeHue(h + dreamShift)
+        l: Math.min(0.8, l + 0.2),
+        c: Math.max(0.06, c * 0.6),
+        h: normalizeHue(dreamHue + 40)
       });
 
-      // Very light near-neutral
+      // Very light pastel
       stops.push({
         mode: 'oklch',
-        l: 0.92,
-        c: 0.02,
-        h: normalizeHue(h + dreamShift * 1.2)
+        l: 0.9,
+        c: Math.max(0.04, c * 0.3),
+        h: normalizeHue(dreamHue + 60)
       });
 
       return stops;
@@ -452,28 +459,28 @@ function generateKeyStops(baseColor, mood, style, stopCount) {
       return stops;
     },
 
-    // NOIR: Dark, minimal, dramatic
+    // NOIR: Dark, minimal, dramatic - but with visible color
     noir: () => {
       const stops = [{
         mode: 'oklch',
-        l: Math.min(0.35, l),
-        c: Math.min(0.06, c * 0.4),
+        l: 0.35,
+        c: Math.max(0.06, Math.min(0.12, c)),
         h
       }];
 
-      // Near-black with base hue undertone
+      // Deep dark with subtle color
       stops.push({
         mode: 'oklch',
-        l: 0.12,
-        c: 0.015,
-        h
+        l: 0.15,
+        c: Math.max(0.03, c * 0.4),
+        h: normalizeHue(h + 20)
       });
 
-      // Dark complement
+      // Dark complement accent
       stops.push({
         mode: 'oklch',
-        l: 0.18,
-        c: Math.min(0.05, c * 0.3),
+        l: 0.25,
+        c: Math.max(0.05, c * 0.5),
         h: normalizeHue(h + 180)
       });
 
@@ -482,30 +489,30 @@ function generateKeyStops(baseColor, mood, style, stopCount) {
 
     // BOTANICAL: Green-yellow arc, organic feel
     botanical: () => {
-      // Bias toward green zone
-      const greenBias = biasTowardRange(h, [80, 160], 0.4);
+      // Force into green zone (100-140)
+      const greenBase = normalizeHue(100 + (h % 50));
 
       const stops = [{
         mode: 'oklch',
-        l,
-        c: Math.min(c, 0.18),
-        h: greenBias
+        l: Math.max(0.45, l),
+        c: Math.max(0.1, Math.min(c, 0.2)),
+        h: greenBase
       }];
 
       // Yellow-green shift
       stops.push({
         mode: 'oklch',
-        l: Math.min(0.7, l + 0.1),
-        c: c * 0.9,
-        h: normalizeHue(greenBias - 30)
+        l: Math.min(0.65, l + 0.15),
+        c: Math.max(0.12, c),
+        h: normalizeHue(greenBase - 25)
       });
 
-      // Deep earthy anchor
+      // Deep forest anchor
       stops.push({
         mode: 'oklch',
-        l: Math.max(0.25, l - 0.2),
-        c: c * 0.5,
-        h: normalizeHue(greenBias + 20)
+        l: Math.max(0.3, l - 0.15),
+        c: Math.max(0.08, c * 0.7),
+        h: normalizeHue(greenBase + 20)
       });
 
       return stops;
@@ -517,9 +524,6 @@ function generateKeyStops(baseColor, mood, style, stopCount) {
       const arcLength = stopCount >= 4 ? 120 : 90;
       const stops = [];
 
-      // Determine if we're creating a warm or cool arc
-      const isWarmBase = (h >= 0 && h < 70) || h >= 330;
-
       for (let i = 0; i < stopCount; i++) {
         const t = i / (stopCount - 1);
 
@@ -527,14 +531,13 @@ function generateKeyStops(baseColor, mood, style, stopCount) {
         const hueOffset = arcLength * t - arcLength / 2;
         const targetHue = normalizeHue(h + hueOffset);
 
-        // Lightness stays remarkably consistent (the magic)
-        // Just a gentle wave for visual interest
-        const lightWave = Math.sin(t * Math.PI) * 0.04;
-        const targetL = clamp(l + lightWave, 0.25, 0.85);
+        // Lightness stays consistent with gentle wave
+        const lightWave = Math.sin(t * Math.PI) * 0.05;
+        const targetL = clamp(Math.max(0.45, l) + lightWave, 0.3, 0.75);
 
-        // Chroma also consistent, slight boost at edges
-        const chromaWave = 1 + Math.abs(t - 0.5) * 0.15;
-        const targetC = clamp(c * chromaWave, 0.08, 0.28);
+        // Ensure visible chroma throughout
+        const chromaWave = 1 + Math.abs(t - 0.5) * 0.2;
+        const targetC = Math.max(0.12, clamp(c * chromaWave, 0.1, 0.28));
 
         stops.push({
           mode: 'oklch',
