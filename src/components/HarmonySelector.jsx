@@ -10,47 +10,47 @@ import {
 import { oklchToHex, getComplementary, getSplitComplementary, getTriadic, getTetradic, getAnalogous, getMonochromatic } from '../utils/colorUtils';
 
 const HARMONIES = [
-  { 
-    id: 'complementary', 
-    name: 'Complementary', 
+  {
+    id: 'complementary',
+    name: 'Complementary',
     icon: Circle,
     description: 'Opposite colors',
-    generator: getComplementary
+    generator: (color) => getComplementary(color, { withLightnessSpread: true })
   },
-  { 
-    id: 'split-complementary', 
-    name: 'Split Comp.', 
+  {
+    id: 'split-complementary',
+    name: 'Split Comp.',
     icon: Triangle,
     description: 'Y-shaped spread',
-    generator: getSplitComplementary
+    generator: (color) => getSplitComplementary(color, { withLightnessSpread: true })
   },
-  { 
-    id: 'triadic', 
-    name: 'Triadic', 
+  {
+    id: 'triadic',
+    name: 'Triadic',
     icon: Triangle,
     description: 'Three equal parts',
-    generator: getTriadic
+    generator: (color) => getTriadic(color, { withLightnessSpread: true })
   },
-  { 
-    id: 'tetradic', 
-    name: 'Tetradic', 
+  {
+    id: 'tetradic',
+    name: 'Tetradic',
     icon: Square,
     description: 'Four corners',
-    generator: getTetradic
+    generator: (color) => getTetradic(color, { withLightnessSpread: true })
   },
-  { 
-    id: 'analogous', 
-    name: 'Analogous', 
+  {
+    id: 'analogous',
+    name: 'Analogous',
     icon: Layers,
     description: 'Adjacent colors',
-    generator: (color) => getAnalogous(color, 5, 25)
+    generator: (color) => getAnalogous(color, 5, 25, { withLightnessSpread: true })
   },
-  { 
-    id: 'monochromatic', 
-    name: 'Mono', 
+  {
+    id: 'monochromatic',
+    name: 'Mono',
     icon: Circle,
     description: 'Single hue',
-    generator: getMonochromatic
+    generator: (color) => getMonochromatic(color, 5, { withLightnessSpread: true })
   },
 ];
 

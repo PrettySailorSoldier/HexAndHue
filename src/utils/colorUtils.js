@@ -108,45 +108,114 @@ export const generateRandomHarmony = ({ count = 5 }) => {
   return getAnalogous(base, count, 30);
 };
 
-export const getComplementary = (color) => {
+export const getComplementary = (color, options = {}) => {
+  const { withLightnessSpread = false } = options;
   const c = toOklch(color);
+
+  if (!withLightnessSpread) {
+    return [
+      c,
+      { ...c, h: (c.h + 180) % 360 }
+    ];
+  }
+
+  // N=1 companion: flip lightness
+  const sourceL = c.l;
+  let companionL = 1.0 - sourceL;
+  if (Math.abs(companionL - sourceL) < 0.15) {
+    companionL = Math.max(0.15, Math.min(0.90, companionL));
+  }
+  let companionC = c.c;
+  if (companionL < 0.25) companionC *= 0.85;
+  else if (companionL > 0.80) companionC *= 0.70;
+
   return [
     c,
-    { ...c, h: (c.h + 180) % 360 }
+    { ...c, h: (c.h + 180) % 360, l: companionL, c: companionC }
   ];
 };
 
-export const getSplitComplementary = (color) => {
+export const getSplitComplementary = (color, options = {}) => {
+  const { withLightnessSpread = false } = options;
   const c = toOklch(color);
+
+  if (!withLightnessSpread) {
+    return [
+      c,
+      { ...c, h: (c.h + 150) % 360 },
+      { ...c, h: (c.h + 210) % 360 }
+    ];
+  }
+
+  const sourceL = c.l;
+  const l0 = Math.max(0.12, Math.min(0.45, sourceL - 0.25));
+  const l1 = Math.max(0.55, Math.min(0.90, sourceL + 0.25));
+  const adjC = (l) => l < 0.25 ? c.c * 0.85 : l > 0.80 ? c.c * 0.70 : c.c;
+
   return [
     c,
-    { ...c, h: (c.h + 150) % 360 },
-    { ...c, h: (c.h + 210) % 360 }
+    { ...c, h: (c.h + 150) % 360, l: l0, c: adjC(l0) },
+    { ...c, h: (c.h + 210) % 360, l: l1, c: adjC(l1) }
   ];
 };
 
-export const getTriadic = (color) => {
+export const getTriadic = (color, options = {}) => {
+  const { withLightnessSpread = false } = options;
   const c = toOklch(color);
+
+  if (!withLightnessSpread) {
+    return [
+      c,
+      { ...c, h: (c.h + 120) % 360 },
+      { ...c, h: (c.h + 240) % 360 }
+    ];
+  }
+
+  const sourceL = c.l;
+  const l0 = Math.max(0.12, Math.min(0.45, sourceL - 0.25));
+  const l1 = Math.max(0.55, Math.min(0.90, sourceL + 0.25));
+  const adjC = (l) => l < 0.25 ? c.c * 0.85 : l > 0.80 ? c.c * 0.70 : c.c;
+
   return [
     c,
-    { ...c, h: (c.h + 120) % 360 },
-    { ...c, h: (c.h + 240) % 360 }
+    { ...c, h: (c.h + 120) % 360, l: l0, c: adjC(l0) },
+    { ...c, h: (c.h + 240) % 360, l: l1, c: adjC(l1) }
   ];
 };
 
-export const getTetradic = (color) => {
+export const getTetradic = (color, options = {}) => {
+  const { withLightnessSpread = false } = options;
   const c = toOklch(color);
+
+  if (!withLightnessSpread) {
+    return [
+      c,
+      { ...c, h: (c.h + 90) % 360 },
+      { ...c, h: (c.h + 180) % 360 },
+      { ...c, h: (c.h + 270) % 360 }
+    ];
+  }
+
+  const sourceL = c.l;
+  const l0 = Math.max(0.10, Math.min(0.40, sourceL - 0.30));
+  const l1 = sourceL;
+  const l2 = Math.max(0.60, Math.min(0.92, sourceL + 0.30));
+  const adjC = (l) => l < 0.25 ? c.c * 0.85 : l > 0.80 ? c.c * 0.70 : c.c;
+
   return [
     c,
-    { ...c, h: (c.h + 90) % 360 },
-    { ...c, h: (c.h + 180) % 360 },
-    { ...c, h: (c.h + 270) % 360 }
+    { ...c, h: (c.h + 90) % 360, l: l0, c: adjC(l0) },
+    { ...c, h: (c.h + 180) % 360, l: l1, c: adjC(l1) },
+    { ...c, h: (c.h + 270) % 360, l: l2, c: adjC(l2) }
   ];
 };
 
-export const getAnalogous = (color, count = 5, slice = 30) => {
+export const getAnalogous = (color, count = 5, slice = 30, options = {}) => {
+  const { withLightnessSpread = false } = options;
   const c = toOklch(color);
-  return Array.from({ length: count }, (_, i) => {
+
+  // Generate base colors with hue offsets (same as before)
+  const base = Array.from({ length: count }, (_, i) => {
     // Distribute colors evenly across the full slice range
     // For count=5, slice=30: positions are -15, -7.5, 0, 7.5, 15
     const offset = count === 1 ? 0 : (i / (count - 1) - 0.5) * slice;
@@ -155,14 +224,56 @@ export const getAnalogous = (color, count = 5, slice = 30) => {
       h: ((c.h + offset) % 360 + 360) % 360
     };
   });
+
+  if (!withLightnessSpread) return base;
+
+  // Source is at the middle index
+  const sourceIdx = Math.floor((count - 1) / 2);
+  const sourceL = c.l;
+  const N = count - 1; // companion count
+
+  // Distribute N lightness values evenly from (sourceL-0.30) to (sourceL+0.30)
+  const lMin = Math.max(0.10, Math.min(0.92, sourceL - 0.30));
+  const lMax = Math.max(0.10, Math.min(0.92, sourceL + 0.30));
+  const companionLs = Array.from({ length: N }, (_, i) => {
+    const t = N === 1 ? 0.5 : i / (N - 1);
+    return lMin + t * (lMax - lMin);
+  });
+
+  const adjC = (l) => l < 0.25 ? c.c * 0.85 : l > 0.80 ? c.c * 0.70 : c.c;
+
+  let companionIdx = 0;
+  const withLightness = base.map((col, i) => {
+    if (i === sourceIdx) return { ...col, l: sourceL };
+    const l = companionLs[companionIdx++];
+    return { ...col, l, c: adjC(l) };
+  });
+
+  // Sort by lightness ascending for display order
+  return withLightness.sort((a, b) => a.l - b.l);
 };
 
-export const getMonochromatic = (color, count = 5) => {
+export const getMonochromatic = (color, count = 5, options = {}) => {
   const c = toOklch(color);
-  return Array.from({ length: count }, (_, i) => ({
+  // Monochromatic ignores withLightnessSpread — always varies lightness by definition
+  const colors = Array.from({ length: count }, (_, i) => ({
     ...c,
     l: Math.max(0, Math.min(1, c.l - 0.4 + (i * 0.8 / (count - 1))))
   }));
+
+  // Ensure span >= 0.60
+  const lValues = colors.map(col => col.l);
+  const span = Math.max(...lValues) - Math.min(...lValues);
+  if (span < 0.60) {
+    const from = Math.max(0.10, Math.min(0.90, c.l - 0.30));
+    const to = Math.max(0.10, Math.min(0.90, c.l + 0.30));
+    return Array.from({ length: count }, (_, i) => ({
+      ...c,
+      l: Math.max(0, Math.min(1, count === 1 ? from : from + (i * (to - from) / (count - 1))))
+    }));
+  }
+
+  return colors;
 };
 
 export { wcagContrast };

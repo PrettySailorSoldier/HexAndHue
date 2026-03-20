@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Lightbulb, Palette, Eye, Layers } from 'lucide-react';
-import { 
-  analyzeColorMood, 
-  generateVibeCompanions, 
+import {
+  analyzeColorMood,
+  generateVibeCompanions,
   findVibeAccent,
   findVibeBackgrounds,
-  getVibePreset 
+  getVibePreset,
+  generateDesignPalette
 } from '../utils/vibeHarmony';
 import { oklchToHex } from '../utils/colorUtils';
 
@@ -18,30 +19,52 @@ const PRESETS = [
   { id: 'neon-noir', name: 'Neon Noir', icon: '🌃' },
 ];
 
+const PALETTE_MODES = [
+  { id: 'vibe', label: 'Vibe' },
+  { id: 'tonal', label: 'Tonal' },
+  { id: 'expressive', label: 'Expressive' },
+];
+
 export default function VibeHarmony({ baseColor, onPaletteGenerate, onColorSelect }) {
   const [vibeResult, setVibeResult] = useState(null);
+  const [designResult, setDesignResult] = useState(null);
   const [accentResult, setAccentResult] = useState(null);
   const [backgroundResult, setBackgroundResult] = useState(null);
   const [activeTab, setActiveTab] = useState('palette');
   const [selectedPreset, setSelectedPreset] = useState(null);
   const [accentIntensity, setAccentIntensity] = useState('balanced');
+  const [paletteMode, setPaletteMode] = useState('vibe');
 
-  // Generate vibe palette when base color changes
+  // Generate palette when base color or palette mode changes
   useEffect(() => {
     if (!baseColor) return;
-    
+
+    // Always analyze vibe for mood header
     const result = generateVibeCompanions(baseColor, { count: 6 });
     setVibeResult(result);
-    
-    // Also generate accent and backgrounds
+
+    // Always generate accent and backgrounds
     setAccentResult(findVibeAccent(baseColor, { intensity: accentIntensity }));
     setBackgroundResult(findVibeBackgrounds(baseColor));
-    
-    // Notify parent of new palette
-    if (onPaletteGenerate && result.palette) {
-      onPaletteGenerate(result.palette.map(p => p.color));
+
+    if (paletteMode === 'vibe') {
+      if (onPaletteGenerate && result.palette) {
+        onPaletteGenerate(result.palette.map(p => p.color));
+      }
+    } else if (paletteMode === 'tonal') {
+      const designRes = generateDesignPalette(baseColor, { mode: 'ui', count: 5 });
+      setDesignResult(designRes);
+      if (onPaletteGenerate) {
+        onPaletteGenerate(designRes.palette.map(p => p.color));
+      }
+    } else if (paletteMode === 'expressive') {
+      const designRes = generateDesignPalette(baseColor, { mode: 'expressive', count: 5 });
+      setDesignResult(designRes);
+      if (onPaletteGenerate) {
+        onPaletteGenerate(designRes.palette.map(p => p.color));
+      }
     }
-  }, [baseColor, accentIntensity]);
+  }, [baseColor, accentIntensity, paletteMode]);
 
   // Handle preset selection
   const handlePresetSelect = (presetId) => {
@@ -65,6 +88,23 @@ export default function VibeHarmony({ baseColor, onPaletteGenerate, onColorSelec
 
   return (
     <div className="space-y-4">
+      {/* Palette mode toggle */}
+      <div className="flex gap-1 p-1 bg-[#0a0a0f] rounded-xl border border-[#1a1a24]">
+        {PALETTE_MODES.map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setPaletteMode(id)}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+              paletteMode === id
+                ? 'bg-[#ff6b4a]/20 border-[#ff6b4a]/40 text-[#ff6b4a]'
+                : 'bg-[#12121a] border-[#1a1a24] text-[#55556a] hover:text-[#8888a0]'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Header with mood info */}
       {vibeResult && (
         <div className="bg-gradient-to-r from-[#ff6b4a]/10 to-[#a855f7]/10 rounded-xl p-4 border border-[#ff6b4a]/20">
@@ -112,8 +152,8 @@ export default function VibeHarmony({ baseColor, onPaletteGenerate, onColorSelec
         ))}
       </div>
 
-      {/* Palette Tab */}
-      {activeTab === 'palette' && vibeResult && (
+      {/* Palette Tab — Vibe mode */}
+      {activeTab === 'palette' && paletteMode === 'vibe' && vibeResult && (
         <div className="space-y-3">
           <div className="space-y-2">
             {vibeResult.palette.map((item, i) => (
@@ -122,7 +162,7 @@ export default function VibeHarmony({ baseColor, onPaletteGenerate, onColorSelec
                 onClick={() => onColorSelect && onColorSelect(item.color)}
                 className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-[#1a1a24] transition-colors group"
               >
-                <div 
+                <div
                   className="w-10 h-10 rounded-lg shadow-lg transition-transform group-hover:scale-105"
                   style={{ backgroundColor: oklchToHex(item.color) }}
                 />
@@ -150,6 +190,45 @@ export default function VibeHarmony({ baseColor, onPaletteGenerate, onColorSelec
               </div>
               <ul className="space-y-1">
                 {vibeResult.tips.map((tip, i) => (
+                  <li key={i} className="text-xs text-[#8888a0] flex gap-2">
+                    <span className="text-[#ff6b4a]">•</span>
+                    {tip}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Palette Tab — Tonal / Expressive mode */}
+      {activeTab === 'palette' && paletteMode !== 'vibe' && designResult && (
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            {designResult.palette.map((item, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center">
+                <button
+                  onClick={() => onColorSelect && onColorSelect(item.color)}
+                  className="w-full aspect-square rounded-lg shadow-lg transition-transform hover:scale-105"
+                  style={{ backgroundColor: oklchToHex(item.color) }}
+                  title={oklchToHex(item.color)}
+                />
+                <span className="text-[10px] text-[#55556a] uppercase tracking-wider text-center mt-1 leading-tight">
+                  {item.role}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Tips */}
+          {designResult.tips && (
+            <div className="bg-[#12121a] rounded-lg p-3 border border-[#1a1a24]">
+              <div className="flex items-center gap-2 mb-2">
+                <Lightbulb size={12} className="text-[#fbbf24]" />
+                <span className="text-[10px] text-[#8888a0] uppercase tracking-wider">Design notes</span>
+              </div>
+              <ul className="space-y-1">
+                {designResult.tips.map((tip, i) => (
                   <li key={i} className="text-xs text-[#8888a0] flex gap-2">
                     <span className="text-[#ff6b4a]">•</span>
                     {tip}

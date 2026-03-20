@@ -780,3 +780,190 @@ export function getVibePreset(presetName, baseColor) {
   return generateVibeCompanions({ ...adjusted, mode: 'oklch' }, config);
 }
 
+
+// ============================================================================
+// 8. DESIGN-SMART TONAL PALETTE ENGINE
+// ============================================================================
+
+/**
+ * Generate a design-system-quality palette with proper lightness hierarchy.
+ * Unlike vibe harmony (same lightness band), this assigns each slot a ROLE
+ * and derives color from the source — ensuring contrast, hierarchy, and utility.
+ *
+ * @param {Object} inputColor - OKLCH color { l, c, h, mode: 'oklch' }
+ * @param {Object} options
+ * @param {string} options.mode - 'ui' | 'brand' | 'expressive' (default: 'ui')
+ * @param {number} options.count - Number of palette swatches (default: 5)
+ * @param {string} options.accentStrategy - 'complement' | 'split' | 'triad' | 'analogous' (default: 'complement')
+ * @returns {Object} Palette with roles, sourceIndex, accentIndex, tips
+ */
+export function generateDesignPalette(inputColor, options = {}) {
+  const {
+    mode = 'ui',
+    count = 5,
+    accentStrategy = 'complement'
+  } = options;
+
+  const l = inputColor.l ?? 0.5;
+  const c = inputColor.c ?? 0.1;
+  const h = inputColor.h ?? 0;
+
+  // Step 1 — Define lightness slots
+  const base5 = [
+    { lTarget: clamp(l - 0.38, 0.08, 0.28), roleKey: 'dark-anchor' },
+    { lTarget: clamp(l - 0.20, 0.18, 0.42), roleKey: 'shadow' },
+    { lTarget: l,                             roleKey: 'source' },
+    { lTarget: clamp(l + 0.20, 0.58, 0.82), roleKey: 'highlight' },
+    { lTarget: clamp(l + 0.38, 0.78, 0.94), roleKey: 'field' },
+  ];
+
+  let slots;
+  let sourceIndexInSlots;
+
+  if (count === 3) {
+    slots = [base5[0], base5[2], base5[4]];
+    sourceIndexInSlots = 1;
+  } else if (count === 4) {
+    slots = [base5[0], base5[1], base5[2], base5[4]];
+    sourceIndexInSlots = 2;
+  } else if (count === 6) {
+    const extraSlot = { lTarget: clamp(l - 0.10, 0.08, 0.92), roleKey: 'shadow-mid' };
+    slots = [base5[0], base5[1], extraSlot, base5[2], base5[3], base5[4]];
+    sourceIndexInSlots = 3;
+  } else {
+    // default: count === 5
+    slots = [...base5];
+    sourceIndexInSlots = 2;
+  }
+
+  // Ensure adjacent slots are at least 0.08 L apart
+  for (let i = 0; i < slots.length - 1; i++) {
+    const diff = slots[i + 1].lTarget - slots[i].lTarget;
+    if (Math.abs(diff) < 0.08) {
+      slots[i].lTarget -= 0.04;
+      slots[i + 1].lTarget += 0.04;
+    }
+  }
+
+  // Step 2+3 — Assign hue and chroma per slot
+  const roleDescriptions = {
+    'dark-anchor': 'Deep tone for text, borders, and strong contrast elements',
+    'shadow':      'Mid-dark tone for secondary text and subtle dividers',
+    'shadow-mid':  'Mid-dark tone for layered depth',
+    'source':      'Your input color — the palette anchor',
+    'highlight':   'Light tone for hover states and gentle emphasis',
+    'field':       'Near-neutral surface tint for backgrounds and containers',
+    'accent':      'High-energy complement for CTAs and focal points',
+  };
+
+  const chromaForRole = (roleKey) => {
+    switch (roleKey) {
+      case 'dark-anchor': return Math.min(c * 0.9, 0.22);
+      case 'shadow':      return Math.min(c * 1.0, 0.25);
+      case 'shadow-mid':  return Math.min(c * 0.95, 0.24);
+      case 'source':      return c;
+      case 'highlight':   return c * 0.75;
+      case 'field':       return Math.max(c * 0.15, 0.008);
+      default:            return c;
+    }
+  };
+
+  let palette = slots.map((slot) => {
+    let hue = h;
+    let chroma = chromaForRole(slot.roleKey);
+
+    if (mode === 'ui') {
+      if (slot.roleKey === 'dark-anchor' || slot.roleKey === 'shadow') hue = h - 4;
+      else if (slot.roleKey === 'highlight' || slot.roleKey === 'field') hue = h + 4;
+      else hue = h;
+    } else if (mode === 'brand') {
+      if (slot.roleKey === 'dark-anchor') hue = h - 12;
+      else if (slot.roleKey === 'shadow') hue = h - 6;
+      else if (slot.roleKey === 'shadow-mid') hue = h + 6;
+      else if (slot.roleKey === 'source') hue = h;
+      else if (slot.roleKey === 'highlight') hue = h + 15;
+      else if (slot.roleKey === 'field') { hue = h; chroma = 0.015; }
+    } else if (mode === 'expressive') {
+      if (slot.roleKey === 'dark-anchor') hue = h + 180;
+      else if (slot.roleKey === 'shadow') hue = h - 30;
+      else if (slot.roleKey === 'shadow-mid') hue = h + 90;
+      else if (slot.roleKey === 'source') hue = h;
+      else if (slot.roleKey === 'highlight') hue = h + 30;
+      else if (slot.roleKey === 'field') hue = h + 150;
+      // Override chroma for non-source slots in expressive mode
+      if (slot.roleKey !== 'source') chroma = Math.max(c * 1.3, 0.20);
+    }
+
+    hue = normalizeHue(hue);
+
+    return {
+      color: { mode: 'oklch', l: slot.lTarget, c: chroma, h: hue },
+      role: slot.roleKey,
+      description: roleDescriptions[slot.roleKey] || slot.roleKey,
+    };
+  });
+
+  // Brand mode: insert accent at slot 3, shift highlight to slot 4, drop field
+  let accentIndex = -1;
+  if (mode === 'brand' && palette.length >= 5) {
+    const accentHueOffsets = { complement: 180, split: 150, triad: 120, analogous: 40 };
+    const accentHue = normalizeHue(h + (accentHueOffsets[accentStrategy] ?? 180));
+    const accentL = clamp(l + 0.05, 0.45, 0.70);
+    const accentC = Math.max(c * 1.4, 0.18);
+
+    const accentEntry = {
+      color: { mode: 'oklch', l: accentL, c: accentC, h: accentHue },
+      role: 'accent',
+      description: roleDescriptions['accent'],
+    };
+
+    // [dark-anchor, shadow, source, accent, highlight] — drop original field
+    palette = [palette[0], palette[1], palette[2], accentEntry, palette[3]];
+    accentIndex = 3;
+  }
+
+  // Step 5 — Validate: no two colors with hue within 15° AND lightness within 0.06
+  for (let i = 0; i < palette.length - 1; i++) {
+    for (let j = i + 1; j < palette.length; j++) {
+      const hueDiff = Math.abs(palette[i].color.h - palette[j].color.h);
+      const hueClose = Math.min(hueDiff, 360 - hueDiff) < 15;
+      const lightDiff = Math.abs(palette[i].color.l - palette[j].color.l);
+      if (hueClose && lightDiff < 0.06) {
+        // Nudge the lighter one's lightness up by 0.08
+        if (palette[i].color.l >= palette[j].color.l) {
+          palette[i].color.l = clamp(palette[i].color.l + 0.08, 0, 1);
+        } else {
+          palette[j].color.l = clamp(palette[j].color.l + 0.08, 0, 1);
+        }
+      }
+    }
+  }
+
+  const sourceIndex = sourceIndexInSlots;
+
+  // Build tips
+  const lValues = palette.map(p => p.color.l);
+  const lMin = Math.min(...lValues);
+  const lMax = Math.max(...lValues);
+  const span = lMax - lMin;
+  const fieldEntry = palette.find(p => p.role === 'field');
+  const darkEntry = palette.find(p => p.role === 'dark-anchor');
+
+  const tips = [
+    `Lightness spans ${Math.round(span * 100)} points — from ${Math.round(lMin * 100)}% to ${Math.round(lMax * 100)}%, giving a full contrast range`,
+    fieldEntry
+      ? 'Use the "field" color (lightest) as your primary UI surface or page background'
+      : 'Use the lightest color as your primary UI surface or page background',
+    darkEntry
+      ? 'Pair body text in the "dark-anchor" color against light field surfaces for maximum readability'
+      : 'Pair the darkest color for text against light surfaces for maximum readability',
+  ];
+
+  return {
+    palette,
+    mode,
+    sourceIndex,
+    accentIndex,
+    tips,
+  };
+}
