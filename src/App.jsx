@@ -29,8 +29,9 @@ import PaintMixer from './components/PaintMixer';
 import ExportPanel from './components/ExportPanel';
 import AccessibilityChecker from './components/AccessibilityChecker';
 import ShadowHighlight from './components/ShadowHighlight';
+import PaletteBuilder from './components/PaletteBuilder';
 
-import { 
+import {
   toOklch, 
   oklchToHex, 
   generateMoodPalette,
@@ -44,6 +45,7 @@ import {
 } from './utils/colorUtils';
 import { generateSmartHarmony } from './utils/smartHarmony';
 import { analyzePalette } from './utils/paletteAnalyzer';
+import { regenerateUnlocked } from './utils/smartFill';
 import { generateColorName } from './utils/colorNames';
 
 const DEFAULT_COLOR = { mode: 'oklch', l: 0.65, c: 0.18, h: 280 };
@@ -136,13 +138,19 @@ export default function App() {
   }, [selectedColor, addToHistory]);
 
   const handleRegenerateMood = useCallback(() => {
-    if (!selectedMood) return;
-    const newPalette = generateMoodPalette(selectedMood, selectedColor);
-    const mergedPalette = newPalette.map((color, i) => 
-      lockedIndices.includes(i) ? moodPalette[i] : color
-    );
+    if (!selectedMood && lockedIndices.length === 0) return;
+
+    let mergedPalette;
+    if (lockedIndices.length > 0) {
+      // Smart fill: locked colors drive what gets generated into unlocked slots
+      mergedPalette = regenerateUnlocked(moodPalette, lockedIndices);
+    } else {
+      const newPalette = generateMoodPalette(selectedMood, selectedColor);
+      mergedPalette = newPalette;
+    }
+
     setMoodPalette(mergedPalette);
-    addToHistory(mergedPalette, `${selectedMood} mood`);
+    addToHistory(mergedPalette, lockedIndices.length > 0 ? 'smart fill' : `${selectedMood} mood`);
   }, [selectedMood, selectedColor, moodPalette, lockedIndices, addToHistory]);
 
   const handleLockToggle = useCallback((index) => {
@@ -204,6 +212,7 @@ export default function App() {
     { id: 'harmonies', label: 'Harmonies', icon: Grid3X3 },
     { id: 'smart', label: 'Smart', icon: Sparkles },
     { id: 'vibe', label: 'Vibe', icon: Waves },
+    { id: 'builder', label: 'Builder', icon: Layers },
     { id: 'mood', label: 'Moods', icon: Sparkles },
     { id: 'extract', label: 'Extract', icon: Image },
     { id: 'gradient', label: 'Gradients', icon: Blend },
@@ -376,6 +385,13 @@ export default function App() {
                   baseColor={selectedColor}
                   onPaletteGenerate={handleMixedPalette}
                   onColorSelect={handleColorSelect}
+                />
+              )}
+
+              {activeTab === 'builder' && (
+                <PaletteBuilder
+                  selectedColor={selectedColor}
+                  onPaletteGenerate={handleMixedPalette}
                 />
               )}
 
